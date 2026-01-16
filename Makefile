@@ -1,0 +1,57 @@
+UNAME_S != uname -s
+OS = ${UNAME_S}
+
+.if ${UNAME_S} == "OpenBSD"
+OS = openbsd
+.elif ${UNAME_S} == "FreeBSD"
+OS = freebsd
+.endif
+
+NAME != cat main.c | grep "const char \*sofname" | awk '{print $$5}' |\
+	sed "s/\"//g" | sed "s/;//"
+VERSION != cat main.c | grep "const char \*version" | awk '{print $$5}' |\
+	sed "s/\"//g" | sed "s/;//"
+
+PREFIX = /usr/local
+
+CC = cc
+FILES = main.c src/*.c
+# FILES = main.c
+
+CFLAGS = -Wall -Wextra \
+	 -I./dep/include -I/usr/include -I/usr/local/include -I/usr/X11R6/include \
+	 -L./dep/lib/${OS} -L/usr/lib -L/usr/local/lib -L/usr/X11R6/lib \
+	 -I/usr/X11R6/include/freetype2 -I/usr/local/include/freetype2
+
+LDFLAGS = -lc -lX11 -lXft -lsys
+SLIB = -lxcb -lthr -lfontconfig -lfreetype -lXrender -lXau -lXdmcp -lexpat -lintl \
+       -lbz2 -lpng16 -lbrotlidec -lz -lm -lbrotlicommon
+
+all: debug
+
+debug:
+	${CC} -O0 -g ${CFLAGS} -o ${NAME} ${FILES} ${LDFLAGS}
+	lldb -o run ${NAME}
+
+develop:
+	${CC} -O3 -g ${CFLAGS} -o ${NAME} ${FILES} ${LDFLAGS} ${SLIB}
+	./${NAME}
+
+release:
+	${CC} -O3 ${CFLAGS} -o ${NAME} ${FILES} -static ${LDFLAGS} ${SLIB}
+	strip ${NAME}
+	./${NAME}
+
+clean:
+	rm -rf ${NAME} *.core *.o
+
+install:
+	cp ${NAME} ${PREFIX}/bin
+	chmod +x ${PREFIX}/bin/${NAME}
+
+uninstall:
+	rm -rf ${PREFIX}/bin/${NAME}
+
+dist:
+
+.PHONY: all debug develop release clean install uninstall dist
