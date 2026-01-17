@@ -9,7 +9,7 @@
 #define BTSEL 0xb8b515
 #define BTCOL 0xf1ed25
 #define BTHVR 0xecea71
-#elif defined(__OpenBSD__)
+#elif defined(__FreeBSD__)
 #define BGCOL 0x232020
 #define BTSEL 0xb61729
 #define BTCOL 0xee4030
