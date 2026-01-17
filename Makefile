@@ -25,9 +25,16 @@ CFLAGS = -Wall -Wextra \
 	 -L./dep/lib/${OS} -L/usr/lib -L/usr/local/lib -L/usr/X11R6/lib \
 	 -I/usr/X11R6/include/freetype2 -I/usr/local/include/freetype2
 
-LDFLAGS = -lc -lX11 -lXft -lsys
-SLIB = -lxcb -lthr -lfontconfig -lfreetype -lXrender -lXau -lXdmcp -lexpat -lintl \
-       -lbz2 -lpng16 -lbrotlidec -lz -lm -lbrotlicommon
+LDFLAGS = -lc -lX11 -lXft
+.if ${UNAME_S} == "FreeBSD"
+LDFLAGS += -lsys
+.endif
+.if ${UNAME_S} == "FreeBSD"
+SLIB += -lxcb -lthr -lfontconfig -lfreetype -lXrender -lXau -lXdmcp -lexpat -lintl \
+        -lbz2 -lpng16 -lbrotlidec -lz -lm -lbrotlicommon
+.elif ${UNAME_S} == "OpenBSD"
+SLIB += -lxcb -lpthread -lfontconfig -lz -lexpat -lfreetype -lXrender -lXau -lXdmcp
+.endif
 
 all: debug
 

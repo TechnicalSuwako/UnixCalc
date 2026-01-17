@@ -215,7 +215,11 @@ void control_expose(UiSystem *ui, XEvent *e) {
     XftColorAllocName(ui->display,
       DefaultVisual(ui->display, DefaultScreen(ui->display)),
       DefaultColormap(ui->display, DefaultScreen(ui->display)),
+#if defined(__OpenBSD__)
+      "#232320", &buttonColor);
+#elif defined(__FreeBSD__)
       "#232020", &buttonColor);
+#endif
   }
   initialized = 1;
 

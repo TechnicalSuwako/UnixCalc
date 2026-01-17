@@ -110,7 +110,11 @@ int main() {
   int w = attr.width;
 
   {
+#if defined(__OpenBSD__)
+    ui.resLabel.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-48");
+#elif defined(__FreeBSD__)
     ui.resLabel.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-72");
+#endif
     if (!ui.resLabel.font) {
       cleanup(&ui);
       fprintf(stderr, "解決フォントの読み込みに失敗。\n");
@@ -131,7 +135,11 @@ int main() {
     if (!XftColorAllocName(ui.display,
         DefaultVisual(ui.display, DefaultScreen(ui.display)),
         DefaultColormap(ui.display, DefaultScreen(ui.display)),
+#if defined(__OpenBSD__)
+        "#f1ed25", &ui.resLabel.fg_color)) {
+#elif defined(__FreeBSD__)
         "#ee4030", &ui.resLabel.fg_color)) {
+#endif
       cleanup(&ui);
       fprintf(stderr, "色の役割に失敗。\n");
       exit(1);
@@ -139,7 +147,11 @@ int main() {
   }
 
   {
+#if defined(__OpenBSD__)
+    ui.problemLabel.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-12");
+#elif defined(__FreeBSD__)
     ui.problemLabel.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-24");
+#endif
     if (!ui.problemLabel.font) {
       cleanup(&ui);
       fprintf(stderr, "問題フォントの読み込みに失敗。\n");
@@ -159,21 +171,33 @@ int main() {
     if (!XftColorAllocName(ui.display,
         DefaultVisual(ui.display, DefaultScreen(ui.display)),
         DefaultColormap(ui.display, DefaultScreen(ui.display)),
+#if defined(__OpenBSD__)
+        "#b8b515", &ui.problemLabel.fg_color)) {
+#elif defined(__FreeBSD__)
         "#b61729", &ui.problemLabel.fg_color)) {
+#endif
       cleanup(&ui);
       fprintf(stderr, "色の役割に失敗。\n");
       exit(1);
     }
   }
 
+#if defined(__OpenBSD__)
+  ui.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-8");
+#elif defined(__FreeBSD__)
   ui.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-12");
+#endif
   if (!ui.font) {
     cleanup(&ui);
     fprintf(stderr, "フォントの読み込みに失敗。\n");
     exit(1);
   }
 
+#if defined(__OpenBSD__)
+  if (!XftColorAllocName(ui.display, &ui.visual, ui.colormap, "#232320", &ui.color)) {
+#elif defined(__FreeBSD__)
   if (!XftColorAllocName(ui.display, &ui.visual, ui.colormap, "#232020", &ui.color)) {
+#endif
     cleanup(&ui);
     fprintf(stderr, "色の役割に失敗。\n");
     exit(1);

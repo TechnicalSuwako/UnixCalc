@@ -4,10 +4,17 @@
 #include <X11/Xft/Xft.h>
 
 #define FGCOL 0xfcfcfc
+#if defined(__OpenBSD__)
+#define BGCOL 0x232320
+#define BTSEL 0xb8b515
+#define BTCOL 0xf1ed25
+#define BTHVR 0xecea71
+#elif defined(__OpenBSD__)
 #define BGCOL 0x232020
 #define BTSEL 0xb61729
 #define BTCOL 0xee4030
 #define BTHVR 0xf35869
+#endif
 
 typedef struct {
   int x, y, width, height;
