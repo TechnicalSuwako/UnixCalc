@@ -120,78 +120,85 @@ double evaluate_simple(const char *expr) {
   return res;
 }
 
-void control_expose(Display *dpy, Window wnd, GC gc, XEvent *e, XftColor *color, XftFont *f, XftFont *df, XftFont *pf) {
-  (void)color;
+void control_expose(UiSystem *ui, XEvent *e) {
   if (e->type != Expose && e->type != ConfigureNotify) return;
 
   XWindowAttributes attr;
-  XGetWindowAttributes(dpy, wnd, &attr);
+  XGetWindowAttributes(ui->display, ui->window, &attr);
   int w = attr.width;
   int h = attr.height;
 
-  if (backbuf != None) {
-    XFreePixmap(dpy, backbuf);
+  if (ui->backbuf != None) {
+    XFreePixmap(ui->display, ui->backbuf);
+    ui->backbuf = None;
   }
 
-  backbuf = XCreatePixmap(dpy, wnd, w, h, DefaultDepth(dpy, DefaultScreen(dpy)));
+  ui->backbuf = XCreatePixmap(ui->display, ui->window, w, h,
+      DefaultDepth(ui->display, DefaultScreen(ui->display)));
 
-  if (backbuf == None) {
-    backbuf = wnd;
+  if (ui->backbuf == None) {
+    fprintf(stderr, "バックバッファ作成失敗！\n");
+    ui->backbuf = ui->window;
   }
 
-  XftDraw *backdraw = XftDrawCreate(dpy, backbuf,
-      DefaultVisual(dpy, DefaultScreen(dpy)), DefaultColormap(dpy, DefaultScreen(dpy)));
+  ui->target = ui->backbuf;
+
+  XftDraw *backdraw = XftDrawCreate(ui->display, ui->backbuf,
+      DefaultVisual(ui->display, DefaultScreen(ui->display)),
+        DefaultColormap(ui->display, DefaultScreen(ui->display)));
   if (!backdraw) {
     fprintf(stderr, "Pixmap向けXftDrawの作成に失敗。\n");
-    XFreePixmap(dpy, backbuf);
-    backbuf = None;
+    XFreePixmap(ui->display, ui->backbuf);
+    ui->backbuf = None;
     return;
   }
 
-  XSetForeground(dpy, gc, BGCOL);
-  XFillRectangle(dpy, backbuf, gc, 0, 0, w, h);
+  XSetForeground(ui->display, ui->gc, BGCOL);
+  XFillRectangle(ui->display, ui->backbuf, ui->gc, 0, 0, w, h);
 
   // 出力
-  if (displaytxt[0] != '\0' && df) {
+  if (displaytxt[0] != '\0' && ui->disfont) {
     const FcChar8 *text = (const FcChar8 *)displaytxt;
     int len = strlen((const char *)text);
 
     XGlyphInfo extents;
-    XftTextExtentsUtf8(dpy, df, text, len, &extents);
+    XftTextExtentsUtf8(ui->display, ui->disfont, text, len, &extents);
 
     int tx = w - 20 - extents.xOff;
     int ty = 160;
 
     XftColor discol;
-    XftColorAllocName(dpy, DefaultVisual(dpy, DefaultScreen(dpy)),
-                      DefaultColormap(dpy, DefaultScreen(dpy)),
+    XftColorAllocName(ui->display, DefaultVisual(ui->display, DefaultScreen(ui->display)),
+                      DefaultColormap(ui->display, DefaultScreen(ui->display)),
                       "#ee4030", &discol);
 
-    XftDrawStringUtf8(backdraw, &discol, df, tx, ty, text, len);
+    XftDrawStringUtf8(backdraw, &discol, ui->disfont, tx, ty, text, len);
 
-    XftColorFree(dpy, DefaultVisual(dpy, DefaultScreen(dpy)),
-                 DefaultColormap(dpy, DefaultScreen(dpy)), &discol);
+    XftColorFree(ui->display, DefaultVisual(ui->display, DefaultScreen(ui->display)),
+                 DefaultColormap(ui->display, DefaultScreen(ui->display)), &discol);
   }
 
-  if (displayprb[0] != '\0' && pf) {
+  if (displayprb[0] != '\0' && ui->prbfont) {
     const FcChar8 *text = (const FcChar8 *)displayprb;
     int len = strlen((const char *)text);
 
     XGlyphInfo extents;
-    XftTextExtentsUtf8(dpy, pf, text, len, &extents);
+    XftTextExtentsUtf8(ui->display, ui->prbfont, text, len, &extents);
 
     int tx = w - 20 - extents.xOff;
     int ty = 80;
 
     XftColor discol;
-    XftColorAllocName(dpy, DefaultVisual(dpy, DefaultScreen(dpy)),
-                      DefaultColormap(dpy, DefaultScreen(dpy)),
-                      "#b61729", &discol);
+    XftColorAllocName(ui->display,
+        DefaultVisual(ui->display, DefaultScreen(ui->display)),
+        DefaultColormap(ui->display, DefaultScreen(ui->display)),
+        "#b61729", &discol);
 
-    XftDrawStringUtf8(backdraw, &discol, pf, tx, ty, text, len);
+    XftDrawStringUtf8(backdraw, &discol, ui->prbfont, tx, ty, text, len);
 
-    XftColorFree(dpy, DefaultVisual(dpy, DefaultScreen(dpy)),
-                 DefaultColormap(dpy, DefaultScreen(dpy)), &discol);
+    XftColorFree(ui->display,
+        DefaultVisual(ui->display, DefaultScreen(ui->display)),
+        DefaultColormap(ui->display, DefaultScreen(ui->display)), &discol);
   }
 
   int width = 93;
@@ -219,50 +226,54 @@ void control_expose(Display *dpy, Window wnd, GC gc, XEvent *e, XftColor *color,
       btn.label = label;
       btn.pressed = 0;
 
-      drawbuttons(dpy, backbuf, gc, &btn, backdraw, color, f);
+      drawbuttons(ui, &btn, backdraw);
     }
   }
 
-  XCopyArea(dpy, backbuf, wnd, gc, 0, 0, w, h, 0, 0);
+  XCopyArea(ui->display, ui->backbuf, ui->window, ui->gc, 0, 0, w, h, 0, 0);
   XftDrawDestroy(backdraw);
-  XFlush(dpy);
+  XFlush(ui->display);
 }
 
-void handle_button_press(Display *dpy, GC gc, int mx, int my, XftColor *col, XftFont *f) {
+void handle_button_press(UiSystem *ui, int mx, int my) {
   SuwaButton *btn = find_button_at(mx, my);
   if (!btn) return;
 
   btn->pressed = 1;
-  XftDraw *backdraw = XftDrawCreate(dpy, backbuf,
-      DefaultVisual(dpy, DefaultScreen(dpy)), DefaultColormap(dpy, DefaultScreen(dpy)));
+  XftDraw *backdraw = XftDrawCreate(ui->display, ui->backbuf,
+      DefaultVisual(ui->display, DefaultScreen(ui->display)),
+        DefaultColormap(ui->display, DefaultScreen(ui->display)));
   if (!backdraw) {
     fprintf(stderr, "Pixmap向けXftDrawの作成に失敗。\n");
-    XFreePixmap(dpy, backbuf);
-    backbuf = None;
+    XFreePixmap(ui->display, ui->backbuf);
+    ui->backbuf = None;
     return;
   }
 
-  drawbuttons(dpy, backbuf, gc, btn, backdraw, col, f);
-  XFlush(dpy);
+  drawbuttons(ui, btn, backdraw);
+  XFlush(ui->display);
 }
 
-void handle_button_release(Display *dpy, Window wnd, GC gc, int mx, int my, XftColor *col, XftFont *f, XftFont *df, XftFont *pf) {
+void handle_button_release(UiSystem *ui, int mx, int my) {
   SuwaButton *btn = find_button_at(mx, my);
   if (!btn) return;
 
   btn->pressed = 0;
 
-  XftDraw *backdraw = XftDrawCreate(dpy, backbuf,
-      DefaultVisual(dpy, DefaultScreen(dpy)), DefaultColormap(dpy, DefaultScreen(dpy)));
+  XftDraw *backdraw = XftDrawCreate(ui->display, ui->backbuf,
+      DefaultVisual(ui->display, DefaultScreen(ui->display)),
+        DefaultColormap(ui->display, DefaultScreen(ui->display)));
   if (!backdraw) {
     fprintf(stderr, "Pixmap向けXftDrawの作成に失敗。\n");
-    XFreePixmap(dpy, backbuf);
-    backbuf = None;
+    XFreePixmap(ui->display, ui->backbuf);
+    ui->backbuf = None;
     return;
   }
-  drawbuttons(dpy, backbuf, gc, btn, backdraw, col, f);
+
+  ui->target = ui->backbuf;
+  drawbuttons(ui, btn, backdraw);
   XftDrawDestroy(backdraw);
-  XFlush(dpy);
+  XFlush(ui->display);
 
   const char *label = btn->label;
   if (strcmp(label, "C") == 0) {
@@ -283,10 +294,10 @@ void handle_button_release(Display *dpy, Window wnd, GC gc, int mx, int my, XftC
     append_to_input(label[0]);
   }
 
-  control_expose(dpy, wnd, gc, &(XEvent){.type = Expose}, col, f, df, pf);
+  control_expose(ui, &(XEvent){.type = Expose});
 }
 
-void handle_key_press(Display *dpy, Window wnd, GC gc, XEvent *event, XftColor *col, XftFont *f, XftFont *df, XftFont *pf) {
+void handle_key_press(UiSystem *ui, XEvent *event) {
   KeySym keysym;
   char buf[32];
   int len;
@@ -369,21 +380,21 @@ void handle_key_press(Display *dpy, Window wnd, GC gc, XEvent *event, XftColor *
   return;
 
 redraw:
-  control_expose(dpy, wnd, gc, &(XEvent){.type = Expose}, col, f, df, pf);
+  control_expose(ui, &(XEvent){.type = Expose});
 }
 
-// void handle_mouse_hover(Display *dpy, Window wnd, GC gc, XEvent *event, XftColor *col, XftFont *f) {
+// void handle_mouse_hover(UiSystem *ui, XEvent *event) {
 //   SuwaButton *hover = find_button_at(event->xmotion.x, event->xmotion.y);
 
 //   if (hover != hovered_btn) {
 //     if (hovered_btn) {
 //       hovered_btn->pressed = 0;
-//       redraw_single_button(dpy, wnd, gc, col, f, hovered_btn);
+//       redraw_single_button(&ui, hovered_btn);
 //     }
 //     hovered_btn = hover;
 
 //     if (hovered_btn) {
-//       redraw_single_button(dpy, wnd, gc, col, f, hovered_btn);
+//       redraw_single_button(&ui, hovered_btn);
 //     }
 //   }
 // }

@@ -1,6 +1,6 @@
 #pragma once
 
 #include "program.h"
+#include "ui.h"
 
-void drawbuttons(Display *dpy, Drawable target, GC gc, SuwaButton *btn,
-    XftDraw *xftdraw, XftColor *textcolor, XftFont *font);
+void drawbuttons(UiSystem *ui, SuwaButton *btn, XftDraw *xftdraw);

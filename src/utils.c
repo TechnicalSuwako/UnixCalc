@@ -1,19 +1,18 @@
 #include "utils.h"
 
-void cleanup(Display *display, Window window, GC gc,
-    XftColor *color, XftColor *btncolor, XftFont *font,
-    XftFont *disfont, XftFont *prbfont, Colormap colormap, Visual *visual,
-    Pixmap backbuf) {
-  if (btncolor) XftColorFree(display, visual, colormap, btncolor);
-  if (color) XftColorFree(display, visual, colormap, color);
-  if (disfont) XftFontClose(display, disfont);
-  if (prbfont) XftFontClose(display, prbfont);
-  if (font) XftFontClose(display, font);
-  if (gc) XFreeGC(display, gc);
-  if (backbuf) {
-    XFreePixmap(display, backbuf);
-    backbuf = None;
+void cleanup(UiSystem *ui) {
+  if (ui->btncolor.pixel != 0)
+    XftColorFree(ui->display, &ui->visual, ui->colormap, &ui->btncolor);
+  if (ui->color.pixel != 0)
+    XftColorFree(ui->display, &ui->visual, ui->colormap, &ui->color);
+  if (ui->disfont) XftFontClose(ui->display, ui->disfont);
+  if (ui->prbfont) XftFontClose(ui->display, ui->prbfont);
+  if (ui->font) XftFontClose(ui->display, ui->font);
+  if (ui->gc) XFreeGC(ui->display, ui->gc);
+  if (ui->backbuf) {
+    XFreePixmap(ui->display, ui->backbuf);
+    ui->backbuf = None;
   }
-  if (window) XDestroyWindow(display, window);
-  if (display) XCloseDisplay(display);
+  if (ui->window) XDestroyWindow(ui->display, ui->window);
+  if (ui->display) XCloseDisplay(ui->display);
 }

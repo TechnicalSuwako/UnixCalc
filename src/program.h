@@ -1,7 +1,5 @@
 #pragma once
 
-#include <X11/Xlib.h>
-#include <X11/Xft/Xft.h>
 #include "ui.h"
 
 #define FGCOL 0xfcfcfc
@@ -17,6 +15,5 @@ extern char displayprb[128];
 extern char curinput[256];
 extern char displaytxt[64];
 extern int input_pos;
-extern Pixmap backbuf;
 extern SuwaButton *hovered_btn;
 extern SuwaButton *pressed_btn;
