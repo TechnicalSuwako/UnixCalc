@@ -256,7 +256,6 @@ void handle_button_release(UiSystem *ui, int mx, int my) {
   if (!btn) return;
 
   btn->pressed = 0;
-
   XftDraw *backdraw = XftDrawCreate(ui->display, ui->backbuf,
       DefaultVisual(ui->display, DefaultScreen(ui->display)),
         DefaultColormap(ui->display, DefaultScreen(ui->display)));
@@ -275,6 +274,10 @@ void handle_button_release(UiSystem *ui, int mx, int my) {
   const char *label = btn->text;
   if (strcmp(label, "C") == 0) {
     clear_calculator(ui);
+  } else if (strcmp(label, "×") == 0) {
+    append_to_input(ui, '*');
+  } else if (strcmp(label, "÷") == 0) {
+    append_to_input(ui, '/');
   } else if (strcmp(label, "<") == 0) {
     curinput[--input_pos] = '\0';
     strcpy(ui->resLabel.text, curinput[0] ? curinput : "0");
