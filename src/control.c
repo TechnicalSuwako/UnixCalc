@@ -5,6 +5,17 @@
 #include "control.h"
 #include "display.h"
 
+#define NUM_ROWS 6
+#define NUM_COLS 4
+
+#define DESIGN_WIDTH          382
+#define DESIGN_HEIGHT         534
+
+#define DESIGN_BUTTON_AREA_Y  224
+#define DESIGN_BUTTON_WIDTH    93
+#define DESIGN_BUTTON_HEIGHT   60
+#define DESIGN_PADDING          2
+
 char curinput[64] = {0};
 int input_pos = 0;
 int initialized = 0;
@@ -19,21 +30,30 @@ static const char *btn_labels[][10] = {
   { "0", ".", "=", "<" },
 };
 
-#define NUM_ROWS 6
-#define NUM_COLS 4
+static inline float get_scale(UiSystem *ui) {
+  XWindowAttributes attr;
+  XGetWindowAttributes(ui->display, ui->xwindow, &attr);
+  float sx = (float)attr.width / DESIGN_WIDTH;
+  float sy = (float)attr.height / DESIGN_HEIGHT;
+  return sx < sy ? sx : sy;
+}
 
-static SuwaButton *find_button_at(int mx, int my) {
+static SuwaButton *find_button_at(UiSystem *ui, int mx, int my) {
   static SuwaButton found = {0};
 
-  int btn_w = 93;
-  int btn_h = 60;
-  int padding = 2;
+  float scale = get_scale(ui);
+  if (scale <= 0) scale = 1.0f;
+
+  int btn_w =   (int)(DESIGN_BUTTON_WIDTH  * scale + .5f);
+  int btn_h =   (int)(DESIGN_BUTTON_HEIGHT * scale + .5f);
+  int padding = (int)(DESIGN_PADDING       * scale + .5f);;
+  int start_y = (int)(DESIGN_BUTTON_AREA_Y * scale + .5f);;
 
   int row = -1;
   int col = -1;
 
   for (int r = 1; r < NUM_ROWS; ++r) {
-    int y_start = 224 + (r - 1) * btn_h + padding;
+    int y_start = start_y + (r - 1) * btn_h + padding;
     if (my >= y_start && my < y_start + btn_h) {
       row = r;
       break;
@@ -52,11 +72,11 @@ static SuwaButton *find_button_at(int mx, int my) {
 
   if (col < 0) return NULL;
 
-  found.x = padding + col * (btn_w + padding);
-  found.y = 224 + (row - 1) * (btn_h + padding);
-  found.width = btn_w;
-  found.height = btn_h;
-  found.text = btn_labels[row][col];
+  found.x       = padding + col * (btn_w + padding);
+  found.y       = start_y + (row - 1) * (btn_h + padding);
+  found.width   = btn_w;
+  found.height  = btn_h;
+  found.text    = btn_labels[row][col];
   found.pressed = 1;
 
   return &found;
@@ -132,19 +152,11 @@ void control_expose(UiSystem *ui, XEvent *e) {
   int w = attr.width;
   int h = attr.height;
 
-  if (ui->backbuf != None) {
-    XFreePixmap(ui->display, ui->backbuf);
-    ui->backbuf = None;
-  }
-
+  if (ui->backbuf != None) XFreePixmap(ui->display, ui->backbuf);
   ui->backbuf = XCreatePixmap(ui->display, ui->xwindow, w, h,
       DefaultDepth(ui->display, DefaultScreen(ui->display)));
 
-  if (ui->backbuf == None) {
-    fprintf(stderr, "バックバッファ作成失敗！\n");
-    ui->backbuf = ui->xwindow;
-  }
-
+  if (ui->backbuf == None) ui->backbuf = ui->xwindow;
   ui->target = ui->backbuf;
 
   XftDraw *backdraw = XftDrawCreate(ui->display, ui->backbuf,
@@ -160,6 +172,11 @@ void control_expose(UiSystem *ui, XEvent *e) {
   XSetForeground(ui->display, ui->gc, BGCOL);
   XFillRectangle(ui->display, ui->backbuf, ui->gc, 0, 0, w, h);
 
+  float scale = get_scale(ui);
+  if (scale <= 0) scale = 1.f;
+
+  int label_padding = (int)(20 * scale + .5f);
+
   // 出力
   {
     XGlyphInfo extents;
@@ -167,12 +184,12 @@ void control_expose(UiSystem *ui, XEvent *e) {
         (const FcChar8 *)ui->resLabel.text,
         strlen(ui->resLabel.text), &extents);
 
-    int tx = w - 20 - extents.xOff;
+    int tx = w - label_padding - extents.xOff;
+    int ty = (int)(180 * scale + .5f);
 
     XftDrawStringUtf8(
         backdraw, &ui->resLabel.fg_color, ui->resLabel.font,
-        tx, ui->resLabel.y,
-        (const FcChar8 *)ui->resLabel.text, 32);
+        tx, ty, (const FcChar8 *)ui->resLabel.text, 64);
   }
 
   {
@@ -181,19 +198,18 @@ void control_expose(UiSystem *ui, XEvent *e) {
         (const FcChar8 *)ui->problemLabel.text,
         strlen(ui->problemLabel.text), &extents);
 
-    int tx = w - 20 - extents.xOff;
+    int tx = w - label_padding - extents.xOff;
+    int ty = (int)(80 * scale + .5f);
 
     XftDrawStringUtf8(
-        backdraw, &ui->problemLabel.fg_color,
-        ui->problemLabel.font, tx, ui->problemLabel.y,
-        (const FcChar8 *)ui->problemLabel.text, 32);
+        backdraw, &ui->problemLabel.fg_color, ui->problemLabel.font,
+        tx, ty, (const FcChar8 *)ui->problemLabel.text, 64);
   }
 
-  for (int i = 0; i < 64; ++i) ui->buttons[i] = NULL;
-  int width = 93;
-  int height = 60;
-  int padding = 2;
-  printf("ウィンドウ: (%dx%d)\n", attr.width, attr.height);
+  int width   = (int)(DESIGN_BUTTON_WIDTH  * scale + .5f);
+  int height  = (int)(DESIGN_BUTTON_HEIGHT * scale + .5f);
+  int padding = (int)(DESIGN_PADDING       * scale + .5f);
+  int start_y = (int)(DESIGN_BUTTON_AREA_Y * scale + .5f);
 
   if (initialized == 0) {
     XftColorAllocName(ui->display,
@@ -204,26 +220,20 @@ void control_expose(UiSystem *ui, XEvent *e) {
   initialized = 1;
 
   for (int row = 1; row < NUM_ROWS; ++row) {
-    int y = 162 + row * (height + padding);
-
     for (int col = 0; col < NUM_COLS; ++col) {
-      const char *label = btn_labels[row][col];
-      if (!label) continue;
+      SuwaButton btn = {
+        .x        = padding + col * (width + padding),
+        .y        = start_y + (row - 1) * (height + padding),
+        .width    = width,
+        .height   = height,
+        .text     = btn_labels[row][col],
+        .font     = ui->font,
+        .bg_color = BTCOL,
+        .fg_color = buttonColor,
+        .pressed  = 0
+      };
 
-      int x = padding + col * (width + padding);
-
-      SuwaButton *btn = malloc(sizeof(SuwaButton));
-      btn->x = x;
-      btn->y = y;
-      btn->width = width;
-      btn->height = height;
-      btn->text = label;
-      btn->bg_color = BTCOL;
-      btn->fg_color = buttonColor;
-      btn->pressed = 0;
-      // ui->buttons[0] = btn;
-
-      drawbuttons(ui, btn, backdraw);
+      drawbuttons(ui, &btn, backdraw);
     }
   }
 
@@ -233,7 +243,7 @@ void control_expose(UiSystem *ui, XEvent *e) {
 }
 
 void handle_button_press(UiSystem *ui, int mx, int my) {
-  SuwaButton *btn = find_button_at(mx, my);
+  SuwaButton *btn = find_button_at(ui, mx, my);
   if (!btn) return;
 
   btn->pressed = 1;
@@ -252,7 +262,7 @@ void handle_button_press(UiSystem *ui, int mx, int my) {
 }
 
 void handle_button_release(UiSystem *ui, int mx, int my) {
-  SuwaButton *btn = find_button_at(mx, my);
+  SuwaButton *btn = find_button_at(ui, mx, my);
   if (!btn) return;
 
   btn->pressed = 0;
@@ -283,16 +293,8 @@ void handle_button_release(UiSystem *ui, int mx, int my) {
     strcpy(ui->resLabel.text, curinput[0] ? curinput : "0");
   } else if (strcmp(label, "=") == 0) {
     double res = evaluate_simple(ui, curinput);
-    if (isnan(res)) {
-      strncpy(ui->resLabel.text, "Error", 5);
-    } else {
-      snprintf(ui->resLabel.text, sizeof(ui->resLabel.text), "%.8g", res);
-      strncpy(curinput, ui->resLabel.text, strlen(ui->resLabel.text));
-      input_pos = strlen(curinput);
-      strcpy(curinput, "");
-      curinput[0] = '\0';
-      input_pos = 0;
-    }
+    if (isnan(res)) strncpy(ui->resLabel.text, "Error", 5);
+    else snprintf(ui->resLabel.text, sizeof(ui->resLabel.text), "%.8g", res);
   } else if (strlen(label) == 1) {
     append_to_input(ui, label[0]);
   }
@@ -350,11 +352,8 @@ void handle_key_press(UiSystem *ui, XEvent *event) {
 
   if (keysym == XK_Return || keysym == XK_KP_Enter) {
     double res = evaluate_simple(ui, curinput);
-    if (isnan(res)) {
-      strncpy(ui->resLabel.text, "Error", 5);
-    } else {
-      snprintf(ui->resLabel.text, sizeof(ui->resLabel.text), "%.8g", res);
-    }
+    if (isnan(res)) strncpy(ui->resLabel.text, "Error", 5);
+    else snprintf(ui->resLabel.text, sizeof(ui->resLabel.text), "%.8g", res);
     goto redraw;
   }
 

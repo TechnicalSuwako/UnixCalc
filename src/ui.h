@@ -24,7 +24,7 @@ typedef struct {
 
 typedef struct {
   int x, y, width, height;
-  char text[32];
+  char text[64];
   XftFont *font;
   XftColor fg_color;
 } SuwaLabel;
@@ -43,5 +43,4 @@ typedef struct {
   SuwaWindow window;
   SuwaLabel resLabel;
   SuwaLabel problemLabel;
-  SuwaButton *buttons[32];
 } UiSystem;

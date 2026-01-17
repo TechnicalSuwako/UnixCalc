@@ -41,6 +41,15 @@ int main() {
     exit(1);
   }
 
+  XSizeHints *sizeHint = XAllocSizeHints();
+  if (sizeHint) {
+    sizeHint->flags = PMinSize;
+    sizeHint->min_width = 382;
+    sizeHint->min_height = 534;
+    XSetWMNormalHints(ui.display, ui.xwindow, sizeHint);
+    XFree(sizeHint);
+  }
+
   ui.backbuf = XCreatePixmap(ui.display, ui.xwindow,
       ui.window.width, ui.window.height,
       DefaultDepth(ui.display, screen));

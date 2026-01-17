@@ -22,7 +22,7 @@ void drawbuttons(UiSystem *ui, SuwaButton *btn, XftDraw *xftdraw) {
     int tx = btn->x + (btn->width - text_w) / 2;
     int ty = btn->y + (btn->height - text_h) / 2 + ui->font->ascent;
 
-    XftDrawStringUtf8(xftdraw, &ui->color, ui->font, tx, ty,
+    XftDrawStringUtf8(xftdraw, &btn->fg_color, ui->font, tx, ty,
         (FcChar8 *)btn->text, len);
   }
 }
