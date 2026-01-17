@@ -1,19 +1,19 @@
 # Unix Calc
 
-XLibre向け電卓。
+XLibre向け電卓。\
 Xorg以外、従属ライブラリを使いません。
 
 ## インストールする方法 | Installation
 ### BSD
 ```sh
 make
-doas make install
+doas make install release
 ```
 
 ### Linux
 ```sh
 make
-doas bmake install
+doas bmake install release
 ```
 
 ![](scrot1.png)\

@@ -14,9 +14,11 @@ VERSION != cat main.c | grep "const char \*version" | awk '{print $$5}' |\
 
 PREFIX = /usr/local
 
+# cc | clang | gcc
 CC = cc
+# lldb | gdb
+DEBUGGER = lldb
 FILES = main.c src/*.c
-# FILES = main.c
 
 CFLAGS = -Wall -Wextra \
 	 -I./dep/include -I/usr/include -I/usr/local/include -I/usr/X11R6/include \
@@ -31,7 +33,7 @@ all: debug
 
 debug:
 	${CC} -O0 -g ${CFLAGS} -o ${NAME} ${FILES} ${LDFLAGS}
-	lldb -o run ${NAME}
+	${DEBUGGER} -o run ${NAME}
 
 develop:
 	${CC} -O3 -g ${CFLAGS} -o ${NAME} ${FILES} ${LDFLAGS} ${SLIB}

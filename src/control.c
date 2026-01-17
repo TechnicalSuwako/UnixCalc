@@ -4,7 +4,11 @@
 
 #include "control.h"
 #include "display.h"
-#include "program.h"
+
+char curinput[64] = {0};
+int input_pos = 0;
+int initialized = 0;
+XftColor buttonColor;
 
 static const char *btn_labels[][10] = {
   { NULL }, // 数字表示
@@ -16,7 +20,7 @@ static const char *btn_labels[][10] = {
 };
 
 #define NUM_ROWS 6
-#define NUM_COLS 6
+#define NUM_COLS 4
 
 static SuwaButton *find_button_at(int mx, int my) {
   static SuwaButton found = {0};
@@ -52,35 +56,35 @@ static SuwaButton *find_button_at(int mx, int my) {
   found.y = 224 + (row - 1) * (btn_h + padding);
   found.width = btn_w;
   found.height = btn_h;
-  found.label = btn_labels[row][col];
+  found.text = btn_labels[row][col];
   found.pressed = 1;
 
   return &found;
 }
 
-void append_to_input(char c) {
+void append_to_input(UiSystem *ui, char c) {
   if ((unsigned long)input_pos >= sizeof(curinput) - 2) return;
-  strcpy(displayprb, "");
+  strcpy(ui->problemLabel.text, "");
   curinput[input_pos++] = c;
   curinput[input_pos] = '\0';
 
-  strncpy(displaytxt, curinput, sizeof(displaytxt) - 1);
-  displaytxt[sizeof(displaytxt) - 1] = '\0';
+  strncpy(ui->resLabel.text, curinput, sizeof(ui->resLabel.text) - 1);
+  ui->resLabel.text[sizeof(ui->resLabel.text) - 1] = '\0';
 }
 
-void clear_calculator(void) {
-  strcpy(displayprb, "");
+void clear_calculator(UiSystem *ui) {
+  strcpy(ui->problemLabel.text, "");
   curinput[0] = '\0';
   input_pos = 0;
-  strcpy(displaytxt, "0");
+  strcpy(ui->resLabel.text, "0");
 }
 
-double evaluate_simple(const char *expr) {
+double evaluate_simple(UiSystem *ui, const char *expr) {
   double res = 0.0;
   double cur = 0.0;
   char op = '+';
   int i = 0;
-  snprintf(displayprb, sizeof(displayprb), "%s=", expr);
+  snprintf(ui->problemLabel.text, sizeof(ui->problemLabel.text), "%s=", expr);
 
   while (expr[i]) {
     if (expr[i] == ' ') { i++; continue; }
@@ -124,7 +128,7 @@ void control_expose(UiSystem *ui, XEvent *e) {
   if (e->type != Expose && e->type != ConfigureNotify) return;
 
   XWindowAttributes attr;
-  XGetWindowAttributes(ui->display, ui->window, &attr);
+  XGetWindowAttributes(ui->display, ui->xwindow, &attr);
   int w = attr.width;
   int h = attr.height;
 
@@ -133,12 +137,12 @@ void control_expose(UiSystem *ui, XEvent *e) {
     ui->backbuf = None;
   }
 
-  ui->backbuf = XCreatePixmap(ui->display, ui->window, w, h,
+  ui->backbuf = XCreatePixmap(ui->display, ui->xwindow, w, h,
       DefaultDepth(ui->display, DefaultScreen(ui->display)));
 
   if (ui->backbuf == None) {
     fprintf(stderr, "バックバッファ作成失敗！\n");
-    ui->backbuf = ui->window;
+    ui->backbuf = ui->xwindow;
   }
 
   ui->target = ui->backbuf;
@@ -157,80 +161,73 @@ void control_expose(UiSystem *ui, XEvent *e) {
   XFillRectangle(ui->display, ui->backbuf, ui->gc, 0, 0, w, h);
 
   // 出力
-  if (displaytxt[0] != '\0' && ui->disfont) {
-    const FcChar8 *text = (const FcChar8 *)displaytxt;
-    int len = strlen((const char *)text);
-
+  {
     XGlyphInfo extents;
-    XftTextExtentsUtf8(ui->display, ui->disfont, text, len, &extents);
+    XftTextExtentsUtf8(ui->display, ui->resLabel.font,
+        (const FcChar8 *)ui->resLabel.text,
+        strlen(ui->resLabel.text), &extents);
 
     int tx = w - 20 - extents.xOff;
-    int ty = 160;
 
-    XftColor discol;
-    XftColorAllocName(ui->display, DefaultVisual(ui->display, DefaultScreen(ui->display)),
-                      DefaultColormap(ui->display, DefaultScreen(ui->display)),
-                      "#ee4030", &discol);
-
-    XftDrawStringUtf8(backdraw, &discol, ui->disfont, tx, ty, text, len);
-
-    XftColorFree(ui->display, DefaultVisual(ui->display, DefaultScreen(ui->display)),
-                 DefaultColormap(ui->display, DefaultScreen(ui->display)), &discol);
+    XftDrawStringUtf8(
+        backdraw, &ui->resLabel.fg_color, ui->resLabel.font,
+        tx, ui->resLabel.y,
+        (const FcChar8 *)ui->resLabel.text, 32);
   }
 
-  if (displayprb[0] != '\0' && ui->prbfont) {
-    const FcChar8 *text = (const FcChar8 *)displayprb;
-    int len = strlen((const char *)text);
-
+  {
     XGlyphInfo extents;
-    XftTextExtentsUtf8(ui->display, ui->prbfont, text, len, &extents);
+    XftTextExtentsUtf8(ui->display, ui->problemLabel.font,
+        (const FcChar8 *)ui->problemLabel.text,
+        strlen(ui->problemLabel.text), &extents);
 
     int tx = w - 20 - extents.xOff;
-    int ty = 80;
 
-    XftColor discol;
-    XftColorAllocName(ui->display,
-        DefaultVisual(ui->display, DefaultScreen(ui->display)),
-        DefaultColormap(ui->display, DefaultScreen(ui->display)),
-        "#b61729", &discol);
-
-    XftDrawStringUtf8(backdraw, &discol, ui->prbfont, tx, ty, text, len);
-
-    XftColorFree(ui->display,
-        DefaultVisual(ui->display, DefaultScreen(ui->display)),
-        DefaultColormap(ui->display, DefaultScreen(ui->display)), &discol);
+    XftDrawStringUtf8(
+        backdraw, &ui->problemLabel.fg_color,
+        ui->problemLabel.font, tx, ui->problemLabel.y,
+        (const FcChar8 *)ui->problemLabel.text, 32);
   }
 
+  for (int i = 0; i < 64; ++i) ui->buttons[i] = NULL;
   int width = 93;
   int height = 60;
   int padding = 2;
   printf("ウィンドウ: (%dx%d)\n", attr.width, attr.height);
 
-  for (int row = 0; row < 6; ++row) {
+  if (initialized == 0) {
+    XftColorAllocName(ui->display,
+      DefaultVisual(ui->display, DefaultScreen(ui->display)),
+      DefaultColormap(ui->display, DefaultScreen(ui->display)),
+      "#232020", &buttonColor);
+  }
+  initialized = 1;
+
+  for (int row = 1; row < NUM_ROWS; ++row) {
     int y = 162 + row * (height + padding);
-    if (y + height > h) break;
 
-    int cols = 4;
-
-    for (int col = 0; col < cols; ++col) {
+    for (int col = 0; col < NUM_COLS; ++col) {
       const char *label = btn_labels[row][col];
       if (!label) continue;
 
       int x = padding + col * (width + padding);
 
-      SuwaButton btn;
-      btn.x = x;
-      btn.y = y;
-      btn.width = width;
-      btn.height = height;
-      btn.label = label;
-      btn.pressed = 0;
+      SuwaButton *btn = malloc(sizeof(SuwaButton));
+      btn->x = x;
+      btn->y = y;
+      btn->width = width;
+      btn->height = height;
+      btn->text = label;
+      btn->bg_color = BTCOL;
+      btn->fg_color = buttonColor;
+      btn->pressed = 0;
+      // ui->buttons[0] = btn;
 
-      drawbuttons(ui, &btn, backdraw);
+      drawbuttons(ui, btn, backdraw);
     }
   }
 
-  XCopyArea(ui->display, ui->backbuf, ui->window, ui->gc, 0, 0, w, h, 0, 0);
+  XCopyArea(ui->display, ui->backbuf, ui->xwindow, ui->gc, 0, 0, w, h, 0, 0);
   XftDrawDestroy(backdraw);
   XFlush(ui->display);
 }
@@ -275,23 +272,26 @@ void handle_button_release(UiSystem *ui, int mx, int my) {
   XftDrawDestroy(backdraw);
   XFlush(ui->display);
 
-  const char *label = btn->label;
+  const char *label = btn->text;
   if (strcmp(label, "C") == 0) {
-    clear_calculator();
+    clear_calculator(ui);
   } else if (strcmp(label, "<") == 0) {
     curinput[--input_pos] = '\0';
-    strcpy(displaytxt, curinput[0] ? curinput : "0");
+    strcpy(ui->resLabel.text, curinput[0] ? curinput : "0");
   } else if (strcmp(label, "=") == 0) {
-    double res = evaluate_simple(curinput);
+    double res = evaluate_simple(ui, curinput);
     if (isnan(res)) {
-      strncpy(displaytxt, "Error", 5);
+      strncpy(ui->resLabel.text, "Error", 5);
     } else {
-      snprintf(displaytxt, sizeof(displaytxt), "%.8g", res);
-      strncpy(curinput, displaytxt, strlen(displaytxt));
+      snprintf(ui->resLabel.text, sizeof(ui->resLabel.text), "%.8g", res);
+      strncpy(curinput, ui->resLabel.text, strlen(ui->resLabel.text));
       input_pos = strlen(curinput);
+      strcpy(curinput, "");
+      curinput[0] = '\0';
+      input_pos = 0;
     }
   } else if (strlen(label) == 1) {
-    append_to_input(label[0]);
+    append_to_input(ui, label[0]);
   }
 
   control_expose(ui, &(XEvent){.type = Expose});
@@ -307,7 +307,7 @@ void handle_key_press(UiSystem *ui, XEvent *event) {
   len = XLookupString(&event->xkey, buf, sizeof(buf), &keysym, NULL);
 
   if (keysym == XK_Q) {
-    isrunning = 0;
+    ui->isrunning = 0;
     return;
   }
 
@@ -341,16 +341,16 @@ void handle_key_press(UiSystem *ui, XEvent *event) {
   }
 
   if (keysym == XK_C) {
-    clear_calculator();
+    clear_calculator(ui);
     goto redraw;
   }
 
   if (keysym == XK_Return || keysym == XK_KP_Enter) {
-    double res = evaluate_simple(curinput);
+    double res = evaluate_simple(ui, curinput);
     if (isnan(res)) {
-      strncpy(displaytxt, "Error", 5);
+      strncpy(ui->resLabel.text, "Error", 5);
     } else {
-      snprintf(displaytxt, sizeof(displaytxt), "%.8g", res);
+      snprintf(ui->resLabel.text, sizeof(ui->resLabel.text), "%.8g", res);
     }
     goto redraw;
   }
@@ -359,7 +359,7 @@ void handle_key_press(UiSystem *ui, XEvent *event) {
   || (keysym == XK_Delete && input_pos > 0)
   || (keysym == XK_X && input_pos > 0)) {
     curinput[--input_pos] = '\0';
-    strcpy(displaytxt, curinput[0] ? curinput : "0");
+    strcpy(ui->resLabel.text, curinput[0] ? curinput : "0");
     goto redraw;
   }
 
@@ -373,7 +373,7 @@ void handle_key_press(UiSystem *ui, XEvent *event) {
   else if (keysym == XK_KP_Decimal  || keysym == XK_period)     c = '.';
 
   if (c) {
-    append_to_input(c);
+    append_to_input(ui, c);
     goto redraw;
   }
 
