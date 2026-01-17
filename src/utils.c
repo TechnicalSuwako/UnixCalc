@@ -1,6 +1,8 @@
 #include "utils.h"
 
 void cleanup(UiSystem *ui) {
+  if (ui->textcolor.pixel != 0)
+    XftColorFree(ui->display, &ui->visual, ui->colormap, &ui->textcolor);
   if (ui->btncolor.pixel != 0)
     XftColorFree(ui->display, &ui->visual, ui->colormap, &ui->btncolor);
   if (ui->color.pixel != 0)

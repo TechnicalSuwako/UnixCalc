@@ -6,7 +6,8 @@
 void drawbuttons(UiSystem *ui, SuwaButton *btn, XftDraw *xftdraw) {
   unsigned long curbg = btn->pressed ? BTSEL : BTCOL;
   XSetForeground(ui->display, ui->gc, curbg);
-  XFillRectangle(ui->display, ui->target, ui->gc, btn->x, btn->y, btn->width, btn->height);
+  XFillRectangle(ui->display, ui->target, ui->gc, btn->x, btn->y,
+      btn->width, btn->height);
 
   // 文字の中央に
   if (btn->label && ui->font && xftdraw) {
@@ -24,7 +25,7 @@ void drawbuttons(UiSystem *ui, SuwaButton *btn, XftDraw *xftdraw) {
 
     // tx -= extents.x;
 
-    XftDrawStringUtf8(xftdraw, &ui->textcolor, ui->font, tx, ty,
+    XftDrawStringUtf8(xftdraw, &ui->color, ui->font, tx, ty,
         (FcChar8 *)btn->label, len);
   }
 }
