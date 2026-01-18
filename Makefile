@@ -16,13 +16,16 @@ PREFIX = /usr/local
 
 # cc | clang | gcc
 CC = cc
+IMPLEMENTS = -DSUWAUI_IMPLEMENTS_SUWAWINDOW \
+	     -DSUWAUI_IMPLEMENTS_SUWALABEL \
+	     -DSUWAUI_IMPLEMENTS_SUWABUTTON
 # lldb | gdb
 DEBUGGER = lldb
-FILES = main.c src/*.c
+FILES = *.c
 
 CFLAGS = -Wall -Wextra \
-	 -I./dep/include -I/usr/include -I/usr/local/include -I/usr/X11R6/include \
-	 -L./dep/lib/${OS} -L/usr/lib -L/usr/local/lib -L/usr/X11R6/lib \
+	 -I./include -I/usr/include -I/usr/local/include -I/usr/X11R6/include \
+	 -L/usr/lib -L/usr/local/lib -L/usr/X11R6/lib \
 	 -I/usr/X11R6/include/freetype2 -I/usr/local/include/freetype2
 
 LDFLAGS = -lc -lX11 -lXft
@@ -39,15 +42,15 @@ SLIB += -lxcb -lpthread -lfontconfig -lz -lexpat -lfreetype -lXrender -lXau -lXd
 all: debug
 
 debug:
-	${CC} -O0 -g ${CFLAGS} -o ${NAME} ${FILES} ${LDFLAGS}
+	${CC} ${IMPLEMENTS} -O0 -g ${CFLAGS} -o ${NAME} ${FILES} ${LDFLAGS}
 	${DEBUGGER} -o run ${NAME}
 
 develop:
-	${CC} -O3 -g ${CFLAGS} -o ${NAME} ${FILES} ${LDFLAGS} ${SLIB}
+	${CC} ${IMPLEMENTS} -O3 -g ${CFLAGS} -o ${NAME} ${FILES} ${LDFLAGS} ${SLIB}
 	./${NAME}
 
 release:
-	${CC} -O3 ${CFLAGS} -o ${NAME} ${FILES} -static ${LDFLAGS} ${SLIB}
+	${CC} ${IMPLEMENTS} -O3 ${CFLAGS} -o ${NAME} ${FILES} -static ${LDFLAGS} ${SLIB}
 	strip ${NAME}
 	./${NAME}
 

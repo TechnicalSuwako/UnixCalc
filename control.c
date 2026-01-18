@@ -3,7 +3,6 @@
 #include <ctype.h>
 
 #include "control.h"
-#include "display.h"
 
 #define NUM_ROWS 6
 #define NUM_COLS 4
@@ -18,8 +17,6 @@
 
 char curinput[64] = {0};
 int input_pos = 0;
-int initialized = 0;
-XftColor buttonColor;
 
 static const char *btn_labels[][10] = {
   { NULL }, // 数字表示
@@ -30,18 +27,10 @@ static const char *btn_labels[][10] = {
   { "0", ".", "=", "<" },
 };
 
-static inline float get_scale(UiSystem *ui) {
-  XWindowAttributes attr;
-  XGetWindowAttributes(ui->display, ui->xwindow, &attr);
-  float sx = (float)attr.width / DESIGN_WIDTH;
-  float sy = (float)attr.height / DESIGN_HEIGHT;
-  return sx < sy ? sx : sy;
-}
-
-static SuwaButton *find_button_at(UiSystem *ui, int mx, int my) {
+static SuwaButton *find_button_at(SuwaWindow *window, int mx, int my) {
   static SuwaButton found = {0};
 
-  float scale = get_scale(ui);
+  float scale = get_scale(window);
   if (scale <= 0) scale = 1.0f;
 
   int btn_w =   (int)(DESIGN_BUTTON_WIDTH  * scale + .5f);
@@ -82,29 +71,29 @@ static SuwaButton *find_button_at(UiSystem *ui, int mx, int my) {
   return &found;
 }
 
-void append_to_input(UiSystem *ui, char c) {
+void append_to_input(CtrlLabels *labels, char c) {
   if ((unsigned long)input_pos >= sizeof(curinput) - 2) return;
-  strcpy(ui->problemLabel.text, "");
+  strcpy(labels->problem->text, "");
   curinput[input_pos++] = c;
   curinput[input_pos] = '\0';
 
-  strncpy(ui->resLabel.text, curinput, sizeof(ui->resLabel.text) - 1);
-  ui->resLabel.text[sizeof(ui->resLabel.text) - 1] = '\0';
+  strncpy(labels->res->text, curinput, sizeof(labels->res->text) - 1);
+  labels->res->text[sizeof(labels->res->text) - 1] = '\0';
 }
 
-void clear_calculator(UiSystem *ui) {
-  strcpy(ui->problemLabel.text, "");
+void clear_calculator(CtrlLabels *labels) {
+  strcpy(labels->problem->text, "");
   curinput[0] = '\0';
   input_pos = 0;
-  strcpy(ui->resLabel.text, "0");
+  strcpy(labels->res->text, "0");
 }
 
-double evaluate_simple(UiSystem *ui, const char *expr) {
+double evaluate_simple(CtrlLabels *labels, const char *expr) {
   double res = 0.0;
   double cur = 0.0;
   char op = '+';
   int i = 0;
-  snprintf(ui->problemLabel.text, sizeof(ui->problemLabel.text), "%s=", expr);
+  snprintf(labels->problem->text, sizeof(labels->problem->text), "%s=", expr);
 
   while (expr[i]) {
     if (expr[i] == ' ') { i++; continue; }
@@ -144,35 +133,35 @@ double evaluate_simple(UiSystem *ui, const char *expr) {
   return res;
 }
 
-void control_expose(UiSystem *ui, XEvent *e) {
-  if (e->type != Expose && e->type != ConfigureNotify) return;
+void control_expose(SuwaWindow *window, CtrlLabels *labels) {
+  if (window->event.type != Expose && window->event.type != ConfigureNotify) return;
 
   XWindowAttributes attr;
-  XGetWindowAttributes(ui->display, ui->xwindow, &attr);
+  XGetWindowAttributes(window->display, window->xwindow, &attr);
   int w = attr.width;
   int h = attr.height;
 
-  if (ui->backbuf != None) XFreePixmap(ui->display, ui->backbuf);
-  ui->backbuf = XCreatePixmap(ui->display, ui->xwindow, w, h,
-      DefaultDepth(ui->display, DefaultScreen(ui->display)));
+  if (window->backbuf != None) XFreePixmap(window->display, window->backbuf);
+  window->backbuf = XCreatePixmap(window->display, window->xwindow, w, h,
+      DefaultDepth(window->display, DefaultScreen(window->display)));
 
-  if (ui->backbuf == None) ui->backbuf = ui->xwindow;
-  ui->target = ui->backbuf;
+  if (window->backbuf == None) window->backbuf = window->xwindow;
+  window->target = window->backbuf;
 
-  XftDraw *backdraw = XftDrawCreate(ui->display, ui->backbuf,
-      DefaultVisual(ui->display, DefaultScreen(ui->display)),
-        DefaultColormap(ui->display, DefaultScreen(ui->display)));
+  XftDraw *backdraw = XftDrawCreate(window->display, window->backbuf,
+      DefaultVisual(window->display, DefaultScreen(window->display)),
+        DefaultColormap(window->display, DefaultScreen(window->display)));
   if (!backdraw) {
     fprintf(stderr, "Pixmap向けXftDrawの作成に失敗。\n");
-    XFreePixmap(ui->display, ui->backbuf);
-    ui->backbuf = None;
+    XFreePixmap(window->display, window->backbuf);
+    window->backbuf = None;
     return;
   }
 
-  XSetForeground(ui->display, ui->gc, BGCOL);
-  XFillRectangle(ui->display, ui->backbuf, ui->gc, 0, 0, w, h);
+  XSetForeground(window->display, window->gc, BGCOL);
+  XFillRectangle(window->display, window->backbuf, window->gc, 0, 0, w, h);
 
-  float scale = get_scale(ui);
+  float scale = get_scale(window);
   if (scale <= 0) scale = 1.f;
 
   int label_padding = (int)(20 * scale + .5f);
@@ -180,152 +169,137 @@ void control_expose(UiSystem *ui, XEvent *e) {
   // 出力
   {
     XGlyphInfo extents;
-    XftTextExtentsUtf8(ui->display, ui->resLabel.font,
-        (const FcChar8 *)ui->resLabel.text,
-        strlen(ui->resLabel.text), &extents);
+    XftTextExtentsUtf8(window->display, labels->res->font,
+        (const FcChar8 *)labels->res->text,
+        strlen(labels->res->text), &extents);
 
     int tx = w - label_padding - extents.xOff;
     int ty = (int)(180 * scale + .5f);
 
     XftDrawStringUtf8(
-        backdraw, &ui->resLabel.fg_color, ui->resLabel.font,
-        tx, ty, (const FcChar8 *)ui->resLabel.text, 64);
+        backdraw, &labels->res->fg_color, labels->res->font,
+        tx, ty, (const FcChar8 *)labels->res->text, 64);
   }
 
   {
     XGlyphInfo extents;
-    XftTextExtentsUtf8(ui->display, ui->problemLabel.font,
-        (const FcChar8 *)ui->problemLabel.text,
-        strlen(ui->problemLabel.text), &extents);
+    XftTextExtentsUtf8(window->display, labels->problem->font,
+        (const FcChar8 *)labels->problem->text,
+        strlen(labels->problem->text), &extents);
 
     int tx = w - label_padding - extents.xOff;
     int ty = (int)(80 * scale + .5f);
 
     XftDrawStringUtf8(
-        backdraw, &ui->problemLabel.fg_color, ui->problemLabel.font,
-        tx, ty, (const FcChar8 *)ui->problemLabel.text, 64);
+        backdraw, &labels->problem->fg_color, labels->problem->font,
+        tx, ty, (const FcChar8 *)labels->problem->text, 64);
   }
 
-  int width   = (int)(DESIGN_BUTTON_WIDTH  * scale + .5f);
-  int height  = (int)(DESIGN_BUTTON_HEIGHT * scale + .5f);
-  int padding = (int)(DESIGN_PADDING       * scale + .5f);
-  int start_y = (int)(DESIGN_BUTTON_AREA_Y * scale + .5f);
+  int bw = (int)(DESIGN_BUTTON_WIDTH  * scale + .5f);
+  int bh = (int)(DESIGN_BUTTON_HEIGHT * scale + .5f);
+  int bp = (int)(DESIGN_PADDING       * scale + .5f);
+  int by = (int)(DESIGN_BUTTON_AREA_Y * scale + .5f);
 
-  if (initialized == 0) {
-    XftColorAllocName(ui->display,
-      DefaultVisual(ui->display, DefaultScreen(ui->display)),
-      DefaultColormap(ui->display, DefaultScreen(ui->display)),
+  XftColor buttonColor;
 #if defined(__OpenBSD__)
-      "#232320", &buttonColor);
+  buttonColor = suwaui_set_button_fgcolor(window, "#232320");
 #elif defined(__FreeBSD__)
-      "#232020", &buttonColor);
+  buttonColor = suwaui_set_button_fgcolor(window, "#232020");
 #endif
-  }
-  initialized = 1;
 
   for (int row = 1; row < NUM_ROWS; ++row) {
     for (int col = 0; col < NUM_COLS; ++col) {
-      SuwaButton btn = {
-        .x        = padding + col * (width + padding),
-        .y        = start_y + (row - 1) * (height + padding),
-        .width    = width,
-        .height   = height,
-        .text     = btn_labels[row][col],
-        .font     = ui->font,
-        .bg_color = BTCOL,
-        .fg_color = buttonColor,
-        .pressed  = 0
-      };
+      SuwaButton btn = suwaui_add_button(bp + col * (bw + bp),
+        by + (row - 1) * (bh + bp),
+        bw, bh, btn_labels[row][col], window->font, BTCOL, buttonColor);
 
-      drawbuttons(ui, &btn, backdraw);
+      suwaui_draw_button(window, &btn, backdraw);
     }
   }
 
-  XCopyArea(ui->display, ui->backbuf, ui->xwindow, ui->gc, 0, 0, w, h, 0, 0);
+  XCopyArea(window->display, window->backbuf, window->xwindow, window->gc,
+      0, 0, w, h, 0, 0);
   XftDrawDestroy(backdraw);
-  XFlush(ui->display);
+  XFlush(window->display);
 }
 
-void handle_button_press(UiSystem *ui, int mx, int my) {
-  SuwaButton *btn = find_button_at(ui, mx, my);
+void handle_button_press(SuwaWindow *window, int mx, int my) {
+  SuwaButton *btn = find_button_at(window, mx, my);
   if (!btn) return;
 
   btn->pressed = 1;
-  XftDraw *backdraw = XftDrawCreate(ui->display, ui->backbuf,
-      DefaultVisual(ui->display, DefaultScreen(ui->display)),
-        DefaultColormap(ui->display, DefaultScreen(ui->display)));
+  XftDraw *backdraw = XftDrawCreate(window->display, window->backbuf,
+      DefaultVisual(window->display, DefaultScreen(window->display)),
+        DefaultColormap(window->display, DefaultScreen(window->display)));
   if (!backdraw) {
     fprintf(stderr, "Pixmap向けXftDrawの作成に失敗。\n");
-    XFreePixmap(ui->display, ui->backbuf);
-    ui->backbuf = None;
+    XFreePixmap(window->display, window->backbuf);
+    window->backbuf = None;
     return;
   }
 
-  drawbuttons(ui, btn, backdraw);
-  XFlush(ui->display);
+  suwaui_draw_button(window, btn, backdraw);
+  XFlush(window->display);
 }
 
-void handle_button_release(UiSystem *ui, int mx, int my) {
-  SuwaButton *btn = find_button_at(ui, mx, my);
+void handle_button_release(SuwaWindow *window, CtrlLabels *labels, int mx, int my) {
+  SuwaButton *btn = find_button_at(window, mx, my);
   if (!btn) return;
 
   btn->pressed = 0;
-  XftDraw *backdraw = XftDrawCreate(ui->display, ui->backbuf,
-      DefaultVisual(ui->display, DefaultScreen(ui->display)),
-        DefaultColormap(ui->display, DefaultScreen(ui->display)));
+  XftDraw *backdraw = XftDrawCreate(window->display, window->backbuf,
+      DefaultVisual(window->display, DefaultScreen(window->display)),
+        DefaultColormap(window->display, DefaultScreen(window->display)));
   if (!backdraw) {
     fprintf(stderr, "Pixmap向けXftDrawの作成に失敗。\n");
-    XFreePixmap(ui->display, ui->backbuf);
-    ui->backbuf = None;
+    XFreePixmap(window->display, window->backbuf);
+    window->backbuf = None;
     return;
   }
 
-  ui->target = ui->backbuf;
-  drawbuttons(ui, btn, backdraw);
+  window->target = window->backbuf;
+  suwaui_draw_button(window, btn, backdraw);
   XftDrawDestroy(backdraw);
-  XFlush(ui->display);
+  XFlush(window->display);
 
   const char *label = btn->text;
   if (strcmp(label, "C") == 0) {
-    clear_calculator(ui);
+    clear_calculator(labels);
   } else if (strcmp(label, "×") == 0) {
-    append_to_input(ui, '*');
+    append_to_input(labels, '*');
   } else if (strcmp(label, "÷") == 0) {
-    append_to_input(ui, '/');
+    append_to_input(labels, '/');
   } else if (strcmp(label, "<") == 0) {
     curinput[--input_pos] = '\0';
-    strcpy(ui->resLabel.text, curinput[0] ? curinput : "0");
+    strcpy(labels->res->text, curinput[0] ? curinput : "0");
   } else if (strcmp(label, "=") == 0) {
-    double res = evaluate_simple(ui, curinput);
-    if (isnan(res)) strncpy(ui->resLabel.text, "Error", 5);
-    else snprintf(ui->resLabel.text, sizeof(ui->resLabel.text), "%.8g", res);
+    double res = evaluate_simple(labels, curinput);
+    if (isnan(res)) strncpy(labels->res->text, "Error", 5);
+    else snprintf(labels->res->text, sizeof(labels->res->text), "%.8g", res);
   } else if (strlen(label) == 1) {
-    append_to_input(ui, label[0]);
+    append_to_input(labels, label[0]);
   }
 
-  control_expose(ui, &(XEvent){.type = Expose});
+  window->event = (XEvent){.type = Expose};
+  control_expose(window, labels);
 }
 
-void handle_key_press(UiSystem *ui, XEvent *event) {
+void handle_key_press(SuwaWindow *window, CtrlLabels *labels) {
   KeySym keysym;
   char buf[32];
   int len;
   (void)len;
 
-  keysym = XLookupKeysym(&event->xkey, 0);
-  len = XLookupString(&event->xkey, buf, sizeof(buf), &keysym, NULL);
+  keysym = XLookupKeysym(&window->event.xkey, 0);
+  len = XLookupString(&window->event.xkey, buf, sizeof(buf), &keysym, NULL);
 
   if (keysym == XK_Q) {
-    ui->isrunning = 0;
+    window->isrunning = 0;
     return;
   }
 
   if (keysym == XK_B) {
     puts("標準電卓画面");
-  }
-
-  if (keysym == XK_S) {
-    puts("関数電卓画面");
   }
 
   if (keysym == XK_P) {
@@ -345,19 +319,18 @@ void handle_key_press(UiSystem *ui, XEvent *event) {
     puts("h = ヘルプ画面 Help screen");
     puts("H = 履歴画面 History screen");
     puts("B = 標準電卓画面 Basic calculator screen");
-    puts("S = 関数電卓画面 Scientific calculator screen");
     puts("P = プログラマー電卓画面 Programmer calculator screen");
   }
 
   if (keysym == XK_C) {
-    clear_calculator(ui);
+    clear_calculator(labels);
     goto redraw;
   }
 
   if (keysym == XK_Return || keysym == XK_KP_Enter) {
-    double res = evaluate_simple(ui, curinput);
-    if (isnan(res)) strncpy(ui->resLabel.text, "Error", 5);
-    else snprintf(ui->resLabel.text, sizeof(ui->resLabel.text), "%.8g", res);
+    double res = evaluate_simple(labels, curinput);
+    if (isnan(res)) strncpy(labels->res->text, "Error", 5);
+    else snprintf(labels->res->text, sizeof(labels->res->text), "%.8g", res);
     goto redraw;
   }
 
@@ -365,7 +338,7 @@ void handle_key_press(UiSystem *ui, XEvent *event) {
   || (keysym == XK_Delete && input_pos > 0)
   || (keysym == XK_X && input_pos > 0)) {
     curinput[--input_pos] = '\0';
-    strcpy(ui->resLabel.text, curinput[0] ? curinput : "0");
+    strcpy(labels->res->text, curinput[0] ? curinput : "0");
     goto redraw;
   }
 
@@ -379,28 +352,31 @@ void handle_key_press(UiSystem *ui, XEvent *event) {
   else if (keysym == XK_KP_Decimal  || keysym == XK_period)     c = '.';
 
   if (c) {
-    append_to_input(ui, c);
+    append_to_input(labels, c);
     goto redraw;
   }
 
   return;
 
 redraw:
-  control_expose(ui, &(XEvent){.type = Expose});
+  window->event = (XEvent){.type = Expose};
+  control_expose(window, labels);
 }
 
-// void handle_mouse_hover(UiSystem *ui, XEvent *event) {
-//   SuwaButton *hover = find_button_at(event->xmotion.x, event->xmotion.y);
+// void handle_mouse_hover(SuwaWindow *window) {
+//   int x = window->event,xmotion.x;
+//   int y = window->event,xmotion.y;
+//   SuwaButton *hover = find_button_at(x, y);
 
 //   if (hover != hovered_btn) {
 //     if (hovered_btn) {
 //       hovered_btn->pressed = 0;
-//       redraw_single_button(&ui, hovered_btn);
+//       redraw_single_button(&window, hovered_btn);
 //     }
 //     hovered_btn = hover;
 
 //     if (hovered_btn) {
-//       redraw_single_button(&ui, hovered_btn);
+//       redraw_single_button(&window, hovered_btn);
 //     }
 //   }
 // }

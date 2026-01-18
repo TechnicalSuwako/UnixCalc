@@ -1,243 +1,79 @@
 #include <stdio.h>
 
 #include <X11/Xatom.h>
-#include "src/utils.h"
-#include "src/control.h"
+#include "control.h"
 
 const char *sofname = "ucalc";
 const char *version = "0.0.0";
 const char *disname = "Unix Calc";
 
 int main() {
-  UiSystem ui;
-  ui.isrunning = 1;
-  ui.window.width = 382;
-  ui.window.height = 534;
-  XEvent event;
-  int screen;
-  XGCValues values;
-
-  ui.display = XOpenDisplay(NULL);
-  if (ui.display == NULL) {
-    fprintf(stderr, "画面を開けられません。\n");
-    exit(1);
-  }
-
-  screen = DefaultScreen(ui.display);
-
-  int sw = DisplayWidth(ui.display, screen);
-  int sh = DisplayHeight(ui.display, screen);
-  ui.window.x = (sw - ui.window.width) / 3;
-  ui.window.y = (sh - ui.window.height) / 2;
-
-  ui.xwindow = XCreateSimpleWindow(ui.display,
-      RootWindow(ui.display, screen),
-      ui.window.x, ui.window.y,
-      ui.window.width, ui.window.height,
-      1, BTCOL, BGCOL);
-  if (!ui.xwindow) {
-    cleanup(&ui);
-    fprintf(stderr, "ウィンドウを作成に失敗。\n");
-    exit(1);
-  }
-
-  XSizeHints *sizeHint = XAllocSizeHints();
-  if (sizeHint) {
-    sizeHint->flags = PMinSize;
-    sizeHint->min_width = 382;
-    sizeHint->min_height = 534;
-    XSetWMNormalHints(ui.display, ui.xwindow, sizeHint);
-    XFree(sizeHint);
-  }
-
-  ui.backbuf = XCreatePixmap(ui.display, ui.xwindow,
-      ui.window.width, ui.window.height,
-      DefaultDepth(ui.display, screen));
-  ui.target = ui.backbuf;
-
-  Atom net_wm_window_type = XInternAtom(ui.display, "_NET_WM_WINDOW_TYPE", False);
-  Atom dialog = XInternAtom(ui.display, "_NET_WM_WINDOW_TYPE_DIALOG", False);
-
-  XChangeProperty(ui.display, ui.xwindow, net_wm_window_type, XA_ATOM, 32,
-      PropModeReplace, (unsigned char *)&dialog, 1);
-
-  XStoreName(ui.display, ui.xwindow, disname);
-  Atom net_wm_name = XInternAtom(ui.display, "_NET_WM_NAME", False);
-  char displayname[16];
-  snprintf(displayname, 16, "%s %s", disname, version);
-  XChangeProperty(ui.display, ui.xwindow, net_wm_name,
-      XInternAtom(ui.display, "UTF8_STRING", False), 8,
-      PropModeReplace, (unsigned char *)displayname, strlen(displayname));
-
-  XClassHint *classHint = XAllocClassHint();
-  if (classHint) {
-    classHint->res_name = "unixcalc";
-    classHint->res_class = "UnixCalc";
-    XSetClassHint(ui.display, ui.xwindow, classHint);
-    XFree(classHint);
-  }
-
-  XSetWindowBackground(ui.display, ui.xwindow, BGCOL);
-
-  XSelectInput(ui.display, ui.xwindow,
-      ExposureMask
-    | ButtonPressMask
-    | ButtonReleaseMask
-    | KeyPressMask
-    // | PointerMotionMask
-    // | ButtonMotionMask
-    // | StructureNotifyMask
-  );
-
-  ui.gc = XCreateGC(ui.display, ui.xwindow, 0, &values);
-  if (!ui.gc) {
-    cleanup(&ui);
-    fprintf(stderr, "GCを作成に失敗。\n");
-    exit(1);
-  }
-
-  ui.visual = *DefaultVisual(ui.display, screen);
-
-  ui.colormap = XCreateColormap(ui.display, ui.xwindow, &ui.visual, AllocNone);
-  if (ui.colormap == None) {
-    cleanup(&ui);
-    fprintf(stderr, "カラーマップを作成に失敗。\n");
-    exit(1);
-  }
-
-  XWindowAttributes attr;
-  XGetWindowAttributes(ui.display, ui.xwindow, &attr);
-  int w = attr.width;
-
-  {
 #if defined(__OpenBSD__)
-    ui.resLabel.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-48");
+  SuwaWindow window = suwaui_create_window(
+      500, 400, 382, 534,
+      disname, version, "unixcalc", "UnixCalc",
+      "Noto Sans CJK-8", "#232320",
+      0, 1, 0);
+  SuwaLabel resLabel = suwaui_add_label(&window, 20, 180, 0, 0, "0",
+      "Noto Sans CJK-48", "#f1ed25", 1);
+  SuwaLabel problemLabel = suwaui_add_label(&window, 20, 80, 0, 0, "",
+      "Noto Sans CJK-12", "#b8b515", 1);
 #elif defined(__FreeBSD__)
-    ui.resLabel.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-72");
+  SuwaWindow window = suwaui_create_window(
+      20, 40, 382, 534,
+      disname, version, "unixcalc", "UnixCalc",
+      "Noto Sans CJK-12", "#232020",
+      0, 1, 0);
+  SuwaLabel resLabel = suwaui_add_label(&window, 20, 180, 0, 0, "0",
+      "Noto Sans CJK-72", "#ee4030", 1);
+  SuwaLabel problemLabel = suwaui_add_label(&window, 20, 80, 0, 0, "",
+      "Noto Sans CJK-24", "#b61729", 1);
 #endif
-    if (!ui.resLabel.font) {
-      cleanup(&ui);
-      fprintf(stderr, "解決フォントの読み込みに失敗。\n");
-      exit(1);
-    }
 
-    ui.resLabel.text[0] = '0';
-    ui.resLabel.text[1] = '\0';
+  CtrlLabels lbl = {
+    .res = &resLabel,
+    .problem = &problemLabel
+  };
 
-    const FcChar8 *text = (const FcChar8 *)ui.resLabel.text;
-    int len = strlen((const char *)text);
-
-    XGlyphInfo extents;
-    XftTextExtentsUtf8(ui.display, ui.resLabel.font, text, len, &extents);
-
-    ui.resLabel.x = w - 20 - extents.xOff;
-    ui.resLabel.y = 180;
-    if (!XftColorAllocName(ui.display,
-        DefaultVisual(ui.display, DefaultScreen(ui.display)),
-        DefaultColormap(ui.display, DefaultScreen(ui.display)),
-#if defined(__OpenBSD__)
-        "#f1ed25", &ui.resLabel.fg_color)) {
-#elif defined(__FreeBSD__)
-        "#ee4030", &ui.resLabel.fg_color)) {
-#endif
-      cleanup(&ui);
-      fprintf(stderr, "色の役割に失敗。\n");
-      exit(1);
-    }
-  }
-
-  {
-#if defined(__OpenBSD__)
-    ui.problemLabel.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-12");
-#elif defined(__FreeBSD__)
-    ui.problemLabel.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-24");
-#endif
-    if (!ui.problemLabel.font) {
-      cleanup(&ui);
-      fprintf(stderr, "問題フォントの読み込みに失敗。\n");
-      exit(1);
-    }
-
-    ui.problemLabel.text[0] = '\0';
-
-    const FcChar8 *text = (const FcChar8 *)ui.problemLabel.text;
-    int len = strlen((const char *)text);
-
-    XGlyphInfo extents;
-    XftTextExtentsUtf8(ui.display, ui.problemLabel.font, text, len, &extents);
-
-    ui.problemLabel.x = w - 20 - extents.xOff;
-    ui.problemLabel.y = 80;
-    if (!XftColorAllocName(ui.display,
-        DefaultVisual(ui.display, DefaultScreen(ui.display)),
-        DefaultColormap(ui.display, DefaultScreen(ui.display)),
-#if defined(__OpenBSD__)
-        "#b8b515", &ui.problemLabel.fg_color)) {
-#elif defined(__FreeBSD__)
-        "#b61729", &ui.problemLabel.fg_color)) {
-#endif
-      cleanup(&ui);
-      fprintf(stderr, "色の役割に失敗。\n");
-      exit(1);
-    }
-  }
-
-#if defined(__OpenBSD__)
-  ui.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-8");
-#elif defined(__FreeBSD__)
-  ui.font = XftFontOpenName(ui.display, screen, "Noto Sans CJK-12");
-#endif
-  if (!ui.font) {
-    cleanup(&ui);
-    fprintf(stderr, "フォントの読み込みに失敗。\n");
-    exit(1);
-  }
-
-#if defined(__OpenBSD__)
-  if (!XftColorAllocName(ui.display, &ui.visual, ui.colormap, "#232320", &ui.color)) {
-#elif defined(__FreeBSD__)
-  if (!XftColorAllocName(ui.display, &ui.visual, ui.colormap, "#232020", &ui.color)) {
-#endif
-    cleanup(&ui);
-    fprintf(stderr, "色の役割に失敗。\n");
-    exit(1);
-  }
-
-  XMapWindow(ui.display, ui.xwindow);
+  XMapWindow(window.display, window.xwindow);
   {
     XWindowAttributes attr;
-    XGetWindowAttributes(ui.display, ui.xwindow, &attr);
+    XGetWindowAttributes(window.display, window.xwindow, &attr);
     XEvent fake = { .type = Expose };
-    fake.xexpose.window = ui.xwindow;
+    fake.xexpose.window = window.xwindow;
     fake.xexpose.width = attr.width;
     fake.xexpose.height = attr.height;
-    control_expose(&ui, &event);
+    control_expose(&window, &lbl);
   }
 
-  while (ui.isrunning) {
-    XNextEvent(ui.display, &event);
+  while (window.isrunning) {
+    XNextEvent(window.display, &window.event);
 
-    switch (event.type) {
+    switch (window.event.type) {
       case Expose:
       case ConfigureNotify:
-        XClearWindow(ui.display, ui.xwindow);
-        control_expose(&ui, &event);
+        XClearWindow(window.display, window.xwindow);
+        control_expose(&window, &lbl);
         break;
       case ButtonPress:
-        if (event.xbutton.button == Button1) {
-          handle_button_press(&ui, event.xbutton.x, event.xbutton.y);
+        if (window.event.xbutton.button == Button1) {
+          int x = window.event.xbutton.x;
+          int y = window.event.xbutton.y;
+          handle_button_press(&window, x, y);
           break;
         }
       case ButtonRelease:
-        if (event.xbutton.button == Button1) {
-          handle_button_release(&ui, event.xbutton.x, event.xbutton.y);
+        if (window.event.xbutton.button == Button1) {
+          int x = window.event.xbutton.x;
+          int y = window.event.xbutton.y;
+          handle_button_release(&window, &lbl, x, y);
           break;
         }
       case KeyPress:
-        handle_key_press(&ui, &event);
+        handle_key_press(&window, &lbl);
         break;
       // case MotionNotify:
-      //   handle_mouse_hover(&ui, &event);
+      //   handle_mouse_hover(&window);
       //   break;
       case ClientMessage:
         // WM_DELETE_WINDOW
@@ -245,7 +81,9 @@ int main() {
     }
   }
 
-  cleanup(&ui);
+  suwaui_del_label(&window, &problemLabel);
+  suwaui_del_label(&window, &resLabel);
+  suwaui_destroy_window(&window);
 
   return 0;
 }
