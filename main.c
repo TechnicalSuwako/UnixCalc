@@ -108,9 +108,9 @@ int main() {
       case KeyPress:
         handle_key_press(&window, &lbl);
         break;
-      // case MotionNotify:
-      //   handle_mouse_hover(&window, &lbl);
-      //   break;
+      case MotionNotify:
+        handle_mouse_hover(&window, &lbl);
+        break;
       case ClientMessage:
         // WM_DELETE_WINDOW
         break;

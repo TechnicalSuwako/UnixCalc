@@ -53,6 +53,8 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 char curinput[64] = {0};
 int input_pos = 0;
+int initialized = 0;
+SuwaButton buttons[NUM_ROWS][NUM_COLS];
 
 static const char *btn_labels[][10] = {
   { NULL }, // 数字表示
@@ -102,7 +104,8 @@ static SuwaButton *find_button_at(SuwaWindow *window, int mx, int my) {
   found.width   = btn_w;
   found.height  = btn_h;
   found.text    = btn_labels[row][col];
-  found.pressed = 1;
+  found.row     = row;
+  found.col     = col;
 
   return &found;
 }
@@ -169,7 +172,35 @@ double evaluate_simple(CtrlLabels *labels, const char *expr) {
   return res;
 }
 
-void control_expose(SuwaWindow *window, CtrlLabels *labels) {
+void initialize_basic_buttons(SuwaWindow *window, XftDraw *backdraw, float scale,
+    SuwaButton *but) {
+  int bw = (int)(DESIGN_BUTTON_WIDTH  * scale + .5f);
+  int bh = (int)(DESIGN_BUTTON_HEIGHT * scale + .5f);
+  int bp = (int)(DESIGN_PADDING       * scale + .5f);
+  int by = (int)(DESIGN_BUTTON_AREA_Y * scale + .5f);
+
+  XftColor buttonColor;
+  buttonColor = suwaui_set_button_fgcolor(window, COLOR_BS);
+
+  for (int row = 1; row < NUM_ROWS; ++row) {
+    for (int col = 0; col < NUM_COLS; ++col) {
+      SuwaButton btn = suwaui_add_button(bp + col * (bw + bp),
+        by + (row - 1) * (bh + bp),
+        bw, bh, btn_labels[row][col], window->font, COLOR_ND, buttonColor);
+
+      if (but != NULL && but->text != NULL) {
+        if (strcmp(but->text, btn.text) == 0) {
+          if (but->pressed == 1) btn.pressed = 1;
+          else if (but->hovered == 1) btn.hovered = 1;
+        }
+      }
+      suwaui_draw_button(window, &btn, backdraw);
+      buttons[row][col] = btn;
+    }
+  }
+}
+
+void control_expose(SuwaWindow *window, CtrlLabels *labels, SuwaButton *button) {
   if (window->event.type != Expose && window->event.type != ConfigureNotify) return;
 
   XWindowAttributes attr;
@@ -194,7 +225,7 @@ void control_expose(SuwaWindow *window, CtrlLabels *labels) {
     return;
   }
 
-  XSetForeground(window->display, window->gc, BGCOL);
+  XSetForeground(window->display, window->gc, COLOR_BD);
   XFillRectangle(window->display, window->backbuf, window->gc, 0, 0, w, h);
 
   float scale = get_scale(window);
@@ -231,27 +262,7 @@ void control_expose(SuwaWindow *window, CtrlLabels *labels) {
         tx, ty, (const FcChar8 *)labels->problem->text, 64);
   }
 
-  int bw = (int)(DESIGN_BUTTON_WIDTH  * scale + .5f);
-  int bh = (int)(DESIGN_BUTTON_HEIGHT * scale + .5f);
-  int bp = (int)(DESIGN_PADDING       * scale + .5f);
-  int by = (int)(DESIGN_BUTTON_AREA_Y * scale + .5f);
-
-  XftColor buttonColor;
-#if defined(__OpenBSD__)
-  buttonColor = suwaui_set_button_fgcolor(window, "#232320");
-#elif defined(__FreeBSD__)
-  buttonColor = suwaui_set_button_fgcolor(window, "#232020");
-#endif
-
-  for (int row = 1; row < NUM_ROWS; ++row) {
-    for (int col = 0; col < NUM_COLS; ++col) {
-      SuwaButton btn = suwaui_add_button(bp + col * (bw + bp),
-        by + (row - 1) * (bh + bp),
-        bw, bh, btn_labels[row][col], window->font, BTCOL, buttonColor);
-
-      suwaui_draw_button(window, &btn, backdraw);
-    }
-  }
+  initialize_basic_buttons(window, backdraw, scale, button);
 
   XCopyArea(window->display, window->backbuf, window->xwindow, window->gc,
       0, 0, w, h, 0, 0);
@@ -259,7 +270,7 @@ void control_expose(SuwaWindow *window, CtrlLabels *labels) {
   XFlush(window->display);
 }
 
-void handle_button_press(SuwaWindow *window, int mx, int my) {
+void handle_button_press(SuwaWindow *window, CtrlLabels *labels, int mx, int my) {
   SuwaButton *btn = find_button_at(window, mx, my);
   if (!btn) return;
 
@@ -274,8 +285,8 @@ void handle_button_press(SuwaWindow *window, int mx, int my) {
     return;
   }
 
-  suwaui_draw_button(window, btn, backdraw);
-  XFlush(window->display);
+  window->event = (XEvent){.type = Expose};
+  control_expose(window, labels, btn);
 }
 
 void handle_button_release(SuwaWindow *window, CtrlLabels *labels, int mx, int my) {
@@ -292,11 +303,6 @@ void handle_button_release(SuwaWindow *window, CtrlLabels *labels, int mx, int m
     window->backbuf = None;
     return;
   }
-
-  window->target = window->backbuf;
-  suwaui_draw_button(window, btn, backdraw);
-  XftDrawDestroy(backdraw);
-  XFlush(window->display);
 
   const char *label = btn->text;
   if (strcmp(label, "C") == 0) {
@@ -317,7 +323,7 @@ void handle_button_release(SuwaWindow *window, CtrlLabels *labels, int mx, int m
   }
 
   window->event = (XEvent){.type = Expose};
-  control_expose(window, labels);
+  control_expose(window, labels, btn);
 }
 
 void handle_key_press(SuwaWindow *window, CtrlLabels *labels) {
@@ -396,23 +402,26 @@ void handle_key_press(SuwaWindow *window, CtrlLabels *labels) {
 
 redraw:
   window->event = (XEvent){.type = Expose};
-  control_expose(window, labels);
+  control_expose(window, labels, &(SuwaButton){0});
 }
 
-// void handle_mouse_hover(SuwaWindow *window) {
-//   int x = window->event,xmotion.x;
-//   int y = window->event,xmotion.y;
-//   SuwaButton *hover = find_button_at(x, y);
+void handle_mouse_hover(SuwaWindow *window, CtrlLabels *labels) {
+  int x = window->event.xmotion.x;
+  int y = window->event.xmotion.y;
+  SuwaButton *btn = find_button_at(window, x, y);
+  if (!btn) return;
 
-//   if (hover != hovered_btn) {
-//     if (hovered_btn) {
-//       hovered_btn->pressed = 0;
-//       redraw_single_button(&window, hovered_btn);
-//     }
-//     hovered_btn = hover;
+  btn->hovered = 1;
+  XftDraw *backdraw = XftDrawCreate(window->display, window->backbuf,
+      DefaultVisual(window->display, DefaultScreen(window->display)),
+        DefaultColormap(window->display, DefaultScreen(window->display)));
+  if (!backdraw) {
+    fprintf(stderr, "Pixmap向けXftDrawの作成に失敗。\n");
+    XFreePixmap(window->display, window->backbuf);
+    window->backbuf = None;
+    return;
+  }
 
-//     if (hovered_btn) {
-//       redraw_single_button(&window, hovered_btn);
-//     }
-//   }
-// }
+  window->event = (XEvent){.type = Expose};
+  control_expose(window, labels, btn);
+}
