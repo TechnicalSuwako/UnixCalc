@@ -48,22 +48,22 @@ int main() {
   SuwaWindow window = suwaui_create_window(
       500, 400, 382, 534,
       disname, version, "unixcalc", "UnixCalc",
-      "Noto Sans CJK-8", "#232320",
+      "Noto Sans CJK-8", COLOR_BS,
       0, 1, 0);
   SuwaLabel resLabel = suwaui_add_label(&window, 20, 180, 0, 0, "0",
-      "Noto Sans CJK-48", "#f1ed25", 1);
+      "Noto Sans CJK-48", COLOR_NS, 1);
   SuwaLabel problemLabel = suwaui_add_label(&window, 20, 80, 0, 0, "",
-      "Noto Sans CJK-12", "#b8b515", 1);
+      "Noto Sans CJK-12", COLOR_DS, 1);
 #elif defined(__FreeBSD__)
   SuwaWindow window = suwaui_create_window(
       20, 40, 382, 534,
       disname, version, "unixcalc", "UnixCalc",
-      "Noto Sans CJK-12", "#232020",
+      "Noto Sans CJK-12", COLOR_BS,
       0, 1, 0);
   SuwaLabel resLabel = suwaui_add_label(&window, 20, 180, 0, 0, "0",
-      "Noto Sans CJK-72", "#ee4030", 1);
+      "Noto Sans CJK-72", COLOR_NS, 1);
   SuwaLabel problemLabel = suwaui_add_label(&window, 20, 80, 0, 0, "",
-      "Noto Sans CJK-24", "#b61729", 1);
+      "Noto Sans CJK-24", COLOR_DS, 1);
 #endif
 
   CtrlLabels lbl = {
@@ -79,7 +79,7 @@ int main() {
     fake.xexpose.window = window.xwindow;
     fake.xexpose.width = attr.width;
     fake.xexpose.height = attr.height;
-    control_expose(&window, &lbl);
+    control_expose(&window, &lbl, &(SuwaButton){0});
   }
 
   while (window.isrunning) {
@@ -89,13 +89,13 @@ int main() {
       case Expose:
       case ConfigureNotify:
         XClearWindow(window.display, window.xwindow);
-        control_expose(&window, &lbl);
+        control_expose(&window, &lbl, &(SuwaButton){0});
         break;
       case ButtonPress:
         if (window.event.xbutton.button == Button1) {
           int x = window.event.xbutton.x;
           int y = window.event.xbutton.y;
-          handle_button_press(&window, x, y);
+          handle_button_press(&window, &lbl, x, y);
           break;
         }
       case ButtonRelease:
@@ -109,7 +109,7 @@ int main() {
         handle_key_press(&window, &lbl);
         break;
       // case MotionNotify:
-      //   handle_mouse_hover(&window);
+      //   handle_mouse_hover(&window, &lbl);
       //   break;
       case ClientMessage:
         // WM_DELETE_WINDOW

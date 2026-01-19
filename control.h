@@ -43,8 +43,8 @@ typedef struct {
   SuwaLabel *problem;
 } CtrlLabels;
 
-void control_expose(SuwaWindow *window, CtrlLabels *labels);
-void handle_button_press(SuwaWindow *window, int mx, int my);
+void control_expose(SuwaWindow *window, CtrlLabels *labels, SuwaButton *button);
+void handle_button_press(SuwaWindow *window, CtrlLabels *labels, int mx, int my);
 void handle_button_release(SuwaWindow *window, CtrlLabels *labels, int mx, int my);
 void handle_key_press(SuwaWindow *window, CtrlLabels *labels);
-// void handle_mouse_hover(SuwaWindow *window);
+// void handle_mouse_hover(SuwaWindow *window, CtrlLabels *labels);
