@@ -275,16 +275,6 @@ void handle_button_press(SuwaWindow *window, CtrlLabels *labels, int mx, int my)
   if (!btn) return;
 
   btn->pressed = 1;
-  XftDraw *backdraw = XftDrawCreate(window->display, window->backbuf,
-      DefaultVisual(window->display, DefaultScreen(window->display)),
-        DefaultColormap(window->display, DefaultScreen(window->display)));
-  if (!backdraw) {
-    fprintf(stderr, "Pixmap向けXftDrawの作成に失敗。\n");
-    XFreePixmap(window->display, window->backbuf);
-    window->backbuf = None;
-    return;
-  }
-
   window->event = (XEvent){.type = Expose};
   control_expose(window, labels, btn);
 }
@@ -294,16 +284,6 @@ void handle_button_release(SuwaWindow *window, CtrlLabels *labels, int mx, int m
   if (!btn) return;
 
   btn->pressed = 0;
-  XftDraw *backdraw = XftDrawCreate(window->display, window->backbuf,
-      DefaultVisual(window->display, DefaultScreen(window->display)),
-        DefaultColormap(window->display, DefaultScreen(window->display)));
-  if (!backdraw) {
-    fprintf(stderr, "Pixmap向けXftDrawの作成に失敗。\n");
-    XFreePixmap(window->display, window->backbuf);
-    window->backbuf = None;
-    return;
-  }
-
   const char *label = btn->text;
   if (strcmp(label, "C") == 0) {
     clear_calculator(labels);
