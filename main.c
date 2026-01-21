@@ -113,7 +113,10 @@ int main() {
       case MotionNotify:
         Time now = window.event.xmotion.time;
         if (now - lasthovertime < 40) break;
-        lasthovertime = now;
+        if (now - lasthovertime > 80) {
+          reset_mouse_hover(&window, &lbl);
+          lasthovertime = now;
+        }
         Window root, child;
         int root_x, root_y,
             win_x, win_y;
@@ -121,8 +124,13 @@ int main() {
 
         XQueryPointer(window.display, window.xwindow, &root, &child,
             &root_x, &root_y, &win_x, &win_y, &mask);
-        if (window.event.xmotion.state == 0) break;
+        if (window.event.xmotion.state == 0) {
+          break;
+        }
         handle_mouse_hover(&window, &lbl, win_x, win_y);
+        break;
+      case LeaveNotify:
+        reset_mouse_hover(&window, &lbl);
         break;
       case ClientMessage:
         // WM_DELETE_WINDOW

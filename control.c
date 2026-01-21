@@ -384,6 +384,14 @@ redraw:
   control_expose(window, labels, &(SuwaButton){0});
 }
 
+void reset_mouse_hover(SuwaWindow *window, CtrlLabels *labels) {
+  if (!lasthover) return;
+  lasthover->hovered = 0;
+  lasthover = NULL;
+  window->event = (XEvent){.type = Expose};
+  control_expose(window, labels, &(SuwaButton){0});
+}
+
 void handle_mouse_hover(SuwaWindow *window, CtrlLabels *labels, int mx, int my) {
   SuwaButton *btn = find_button_at(window, mx, my);
   if (!btn) return;

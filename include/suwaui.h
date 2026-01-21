@@ -334,6 +334,8 @@ __attribute__((unused)) static SuwaWindow suwaui_create_window(int x, int y, int
     | KeyPressMask
     | PointerMotionMask
     | Button1MotionMask
+    | EnterWindowMask
+    | LeaveWindowMask
     // | StructureNotifyMask
   );
 
