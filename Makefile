@@ -43,7 +43,7 @@ all: debug
 
 debug:
 	${CC} ${IMPLEMENTS} -O0 -g ${CFLAGS} -o ${NAME} ${FILES} ${LDFLAGS}
-	${DEBUGGER} -o run ${NAME}
+	${DEBUGGER} -o "settings set target.x86-disassembly-flavor" -o run ${NAME}
 
 develop:
 	${CC} ${IMPLEMENTS} -O3 -g ${CFLAGS} -o ${NAME} ${FILES} ${LDFLAGS} ${SLIB}
