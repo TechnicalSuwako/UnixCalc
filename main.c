@@ -43,6 +43,8 @@ const char *sofname = "ucalc";
 const char *version = "0.0.0";
 const char *disname = "Unix Calc";
 
+static Time lasthovertime = 0;
+
 int main() {
 #if defined(__OpenBSD__)
   SuwaWindow window = suwaui_create_window(
@@ -109,7 +111,18 @@ int main() {
         handle_key_press(&window, &lbl);
         break;
       case MotionNotify:
-        handle_mouse_hover(&window, &lbl);
+        Time now = window.event.xmotion.time;
+        if (now - lasthovertime < 40) break;
+        lasthovertime = now;
+        Window root, child;
+        int root_x, root_y,
+            win_x, win_y;
+        unsigned int mask;
+
+        XQueryPointer(window.display, window.xwindow, &root, &child,
+            &root_x, &root_y, &win_x, &win_y, &mask);
+        if (window.event.xmotion.state == 0) break;
+        handle_mouse_hover(&window, &lbl, win_x, win_y);
         break;
       case ClientMessage:
         // WM_DELETE_WINDOW

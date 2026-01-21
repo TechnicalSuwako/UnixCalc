@@ -54,7 +54,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 char curinput[64] = {0};
 int input_pos = 0;
 int initialized = 0;
-SuwaButton buttons[NUM_ROWS][NUM_COLS];
+SuwaButton *lasthover = NULL;
 
 static const char *btn_labels[][10] = {
   { NULL }, // 数字表示
@@ -195,7 +195,6 @@ void initialize_basic_buttons(SuwaWindow *window, XftDraw *backdraw, float scale
         }
       }
       suwaui_draw_button(window, &btn, backdraw);
-      buttons[row][col] = btn;
     }
   }
 }
@@ -385,23 +384,14 @@ redraw:
   control_expose(window, labels, &(SuwaButton){0});
 }
 
-void handle_mouse_hover(SuwaWindow *window, CtrlLabels *labels) {
-  int x = window->event.xmotion.x;
-  int y = window->event.xmotion.y;
-  SuwaButton *btn = find_button_at(window, x, y);
+void handle_mouse_hover(SuwaWindow *window, CtrlLabels *labels, int mx, int my) {
+  SuwaButton *btn = find_button_at(window, mx, my);
   if (!btn) return;
 
-  btn->hovered = 1;
-  XftDraw *backdraw = XftDrawCreate(window->display, window->backbuf,
-      DefaultVisual(window->display, DefaultScreen(window->display)),
-        DefaultColormap(window->display, DefaultScreen(window->display)));
-  if (!backdraw) {
-    fprintf(stderr, "Pixmap向けXftDrawの作成に失敗。\n");
-    XFreePixmap(window->display, window->backbuf);
-    window->backbuf = None;
-    return;
-  }
+  if (lasthover && lasthover != btn) lasthover->hovered = 0;
+  if (btn) btn->hovered = 1;
+  lasthover = btn;
 
   window->event = (XEvent){.type = Expose};
-  control_expose(window, labels, btn);
+  control_expose(window, labels, btn ? btn : &(SuwaButton){0});
 }
