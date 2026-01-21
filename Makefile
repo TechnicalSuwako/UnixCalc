@@ -36,7 +36,8 @@ LDFLAGS += -lsys
 SLIB += -lxcb -lthr -lfontconfig -lfreetype -lXrender -lXau -lXdmcp -lexpat -lintl \
         -lbz2 -lpng16 -lbrotlidec -lz -lm -lbrotlicommon
 .elif ${UNAME_S} == "OpenBSD"
-SLIB += -lxcb -lpthread -lfontconfig -lz -lexpat -lfreetype -lXrender -lXau -lXdmcp
+SLIB += -lxcb -lpthread -lfontconfig -lz -lm -lexpat -lfreetype -lpng -lXrender -lXau \
+				-lXdmcp
 .endif
 
 all: debug
